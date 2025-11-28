@@ -52,7 +52,6 @@ const SHADOW_STYLE = {
   elevation: 6,
 };
 
-
 const MessageBubble = ({ item }) => {
   const isPatient = item.isPatient;
   const AppIonicons = Ionicons || MockIonicons; 
