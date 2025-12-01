@@ -10,7 +10,7 @@ const DILATATION_METAPHORS = [
   { cm: 5, text: 'Fase Aktif', metaphor: 'Buah Kiwi', caption: 'Hampir setengah jalan! Terus bergerak dan bernapas.', progress: 0.5, icon: 'hourglass-half-outline' },
   { cm: 6, text: 'Fase Aktif Lanjut', metaphor: 'Kue Marie / Kuki', caption: 'Lebih dari setengah jalan! Pertahankan fokus dan energi.', progress: 0.6, icon: 'heart-circle-outline' },
   { cm: 7, text: 'Fase Transisi', metaphor: 'Tomat Merah', caption: 'Masa transisi yang intens. Ingat tujuan Bunda!', progress: 0.7, icon: 'flash-outline' },
-  { cm: 8, text: 'Fase Transisi', metaphor: 'Jeruk Sunkist / Apel', caption: 'Pembukaan semakin cepat. Anda hebat!', progress: 0.8, icon: 'fast-food-outline' },
+  { cm: 8, text: 'Fase Transisi', metaphor: 'Jeruk Sunkist / Apel', caption: 'Pembukaan semakin cepat. Bunda hebat!', progress: 0.8, icon: 'fast-food-outline' },
   { cm: 9, text: 'Fase Transisi Akhir', metaphor: 'Donat', caption: 'Sedikit lagi, hampir sempurna!', progress: 0.9, icon: 'cloud-done-outline' },
   { cm: 10, text: 'Kala II', metaphor: 'Kepala Bayi / Semangka Kecil', caption: 'Pembukaan Lengkap! Siap mengejan sesuai aba-aba Bidan.', progress: 1.0, icon: 'happy-outline' },
 ];

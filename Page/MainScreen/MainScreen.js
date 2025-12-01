@@ -174,7 +174,6 @@ export default function MainScreen() {
     fetchData();
   }, [fetchData]);
 
-
   if (loading) {
     return (
       <View style={styles.loadingWrapper}>

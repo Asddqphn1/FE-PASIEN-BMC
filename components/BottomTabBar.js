@@ -30,13 +30,6 @@ const BottomTabBar = ({ navigate }) => (
     />
 
     <TabBarItem
-      iconName="message-text"
-      label="Pesan"
-      isFocused={false}
-      onPress={() => navigate('/pesan')} 
-    />
-
-    <TabBarItem
       iconName="book-open-page-variant"
       label="Edukasi"
       isFocused={false}

@@ -5,7 +5,6 @@ import LoginScreen from "./Page/LoginScreen/LoginScreen";
 import MainScreen from "./Page/MainScreen/MainScreen";
 import ProfileScreen from "./Page/ProfileScreen/ProfileScreen";
 import EdukasiScreen from "./Page/EdukasiScreen/EdukasiScreen";
-import PesanScreen from "./Page/PesanScreen/PesanScreen";
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -17,7 +16,6 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Saat loading tampilkan SplashScreen
   if (isLoading) {
     return <SplashScreen />;
   }
@@ -29,7 +27,6 @@ export default function App() {
         <Route path="/home" element={<MainScreen />} />
         <Route path="/profile" element={<ProfileScreen />} />
         <Route path="/edukasi" element={<EdukasiScreen />} />
-        <Route path="/pesan" element={<PesanScreen />} />
       </Routes>
     </NativeRouter>
   );
