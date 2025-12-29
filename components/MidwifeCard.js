@@ -12,10 +12,6 @@ const MidwifeCard = ({ bidanName, activePhase, waktuCatat }) => (
           <Text style={styles.midwifeLabel}>Ditangani oleh Bidan:</Text>
           <Text style={styles.midwifeName}>{bidanName}</Text>
         </View>
-        <View style={styles.activeIndicatorContainer}>
-          <Text style={styles.activeText}>Aktif</Text>
-          <View style={styles.activeIndicator} />
-        </View>
       </View>
 
       <View style={styles.stageNoteMidwife}>

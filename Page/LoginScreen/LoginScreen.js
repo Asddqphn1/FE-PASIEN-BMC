@@ -12,63 +12,57 @@ import {
   ActivityIndicator,
   Modal,
 } from "react-native";
-import { FontAwesome, Ionicons, Feather } from "@expo/vector-icons"; // Tambah Feather
+import { FontAwesome, Ionicons, Feather } from "@expo/vector-icons";
 import { useNavigate } from "react-router-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BlurView } from "expo-blur";
 
-// === TEMA WARNA (Disamakan dengan HomeCatatanPartograf) ===
+// === TEMA WARNA ===
 const THEME = {
   active: "#29B6F6",
   danger: "#E53935",
   success: "#2E7D32",
   warning: "#FFB300",
   textMain: "#263238",
-  card: "#FFFFFF"
+  card: "#FFFFFF",
 };
 
-// === CUSTOM MODAL BARU (Persis HomeCatatanPartograf) ===
+// === CUSTOM MODAL BARU ===
 const CustomAlertModal = ({ visible, title, message, type, onClose }) => {
-  // Konfigurasi Warna & Icon Pastel
   const getConfig = () => {
     switch (type) {
-      case "error": // Mapping 'error' ke style 'danger'
+      case "error":
       case "danger":
-        return { 
-          icon: "alert-circle", 
-          color: "#FF5252", 
-          bgColor: "#FFEBEE" // Merah muda lembut
-        };
+        return { icon: "alert-circle", color: "#FF5252", bgColor: "#FFEBEE" };
       case "success":
-        return { 
-          icon: "check-circle", 
-          color: "#4CAF50", 
-          bgColor: "#E8F5E9" // Hijau muda lembut
-        };
+        return { icon: "check-circle", color: "#4CAF50", bgColor: "#E8F5E9" };
       case "info":
       default:
-        return { 
-          icon: "info", 
-          color: "#2196F3", 
-          bgColor: "#E3F2FD" // Biru muda lembut
-        };
+        return { icon: "info", color: "#2196F3", bgColor: "#E3F2FD" };
     }
   };
 
   const config = getConfig();
 
   return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={modalStyles.backdrop}>
         <View style={modalStyles.alertBox}>
-          {/* Header Icon dengan Background Lingkaran Pastel */}
-          <View style={[modalStyles.iconContainer, { backgroundColor: config.bgColor }]}>
+          <View
+            style={[
+              modalStyles.iconContainer,
+              { backgroundColor: config.bgColor },
+            ]}
+          >
             <Feather name={config.icon} size={40} color={config.color} />
           </View>
-
           <Text style={modalStyles.title}>{title}</Text>
           <Text style={modalStyles.message}>{message}</Text>
-
           <TouchableOpacity
             style={[modalStyles.button, { backgroundColor: config.color }]}
             onPress={onClose}
@@ -88,9 +82,13 @@ export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Config Alert sekarang menangani Success juga
-  const [alertConfig, setAlertConfig] = useState({ visible: false, title: "", message: "", type: "info" });
+
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    title: "",
+    message: "",
+    type: "info",
+  });
 
   const navigate = useNavigate();
 
@@ -104,31 +102,69 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!username || !password) {
-      showAlert("Data Belum Lengkap", "Username dan Password tidak boleh kosong.", "danger");
+      showAlert(
+        "Data Belum Lengkap",
+        "Username dan Password tidak boleh kosong.",
+        "danger"
+      );
       return;
     }
     setIsLoading(true);
     try {
-      const response = await fetch(`https://restful-api-bmc-production-v2.up.railway.app/api/login-pasien`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
+      // 1. REQUEST LOGIN
+      const response = await fetch(
+        `https://restful-api-bmc-production-v2.up.railway.app/api/login-pasien`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ username, password }),
+        }
+      );
       const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Username atau Password salah.");
-      
+
+      if (!response.ok)
+        throw new Error(data.message || "Username atau Password salah.");
+      if (!data.token) throw new Error("Token tidak diterima dari server.");
+
+      // 2. FETCH DATA PASIEN LENGKAP (Untuk cek status persalinan)
+      // Kita butuh No REG untuk hit endpoint getData
+      const noReg = data.pasien?.no_reg;
+
+      if (noReg) {
+        const detailResponse = await fetch(
+          `https://restful-api-bmc-production-v2.up.railway.app/api/pasien/${noReg}/getData`,
+          {
+            headers: { Authorization: `Bearer ${data.token}` },
+          }
+        );
+        const detailData = await detailResponse.json();
+
+        // Simpan Profile lengkap (termasuk array persalinan) ke storage
+        if (detailData.data) {
+          await AsyncStorage.setItem(
+            "userProfile",
+            JSON.stringify(detailData.data)
+          );
+        }
+      }
+
+      // Simpan Token
+      await AsyncStorage.setItem("userToken", data.token);
+
       setIsLoading(false);
-      if (data.token) await AsyncStorage.setItem("userToken", data.token);
+      showAlert(
+        "Login Berhasil",
+        "Selamat datang kembali di Ruang Bunda.",
+        "success"
+      );
 
-      // Tampilkan Alert Sukses dengan desain baru
-      showAlert("Login Berhasil", "Selamat datang kembali di Ruang Bunda.", "success");
-
-      // Redirect otomatis setelah 1.5 detik
-      setTimeout(() => { 
+      setTimeout(() => {
         closeAlert();
-        navigate("/home"); 
+        navigate("/home");
       }, 1500);
-
     } catch (error) {
       setIsLoading(false);
       showAlert("Gagal Masuk", error.message, "danger");
@@ -136,18 +172,18 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-      
-      {/* Alert Modal Baru */}
-      <CustomAlertModal 
-        visible={alertConfig.visible} 
-        title={alertConfig.title} 
-        message={alertConfig.message} 
-        type={alertConfig.type} 
-        onClose={closeAlert} 
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <CustomAlertModal
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        onClose={closeAlert}
       />
 
-      {/* Header Tetap Di Atas */}
       <View style={styles.header}>
         <Image source={require("../../assets/Logo.png")} style={styles.logo} />
         <View style={styles.textBlock}>
@@ -156,12 +192,17 @@ export default function LoginScreen() {
         </View>
       </View>
 
-      {/* Gambar Latar */}
       <View style={styles.imageWrapper}>
-        <Image source={require("../../assets/ibu-hamil.png")} style={styles.doctorImage} />
+        <Image
+          source={require("../../assets/ibu-hamil.png")}
+          style={styles.doctorImage}
+        />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
         <BlurView intensity={80} tint="light" style={styles.loginCard}>
           <Text style={styles.loginTitle}>Login</Text>
 
@@ -190,12 +231,24 @@ export default function LoginScreen() {
               onChangeText={setPassword}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <FontAwesome name={showPassword ? "eye-slash" : "eye"} size={18} color="#fff" />
+              <FontAwesome
+                name={showPassword ? "eye-slash" : "eye"}
+                size={18}
+                color="#fff"
+              />
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={isLoading}>
-            {isLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginButtonText}>Login</Text>}
+          <TouchableOpacity
+            style={styles.loginButton}
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.loginButtonText}>Login</Text>
+            )}
           </TouchableOpacity>
         </BlurView>
       </ScrollView>
@@ -205,14 +258,26 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9F6F2" },
-  
-  // Style Login Screen (Original)
-  header: { flexDirection: "row", alignItems: "center", marginTop: 50, marginLeft: 20, position: 'absolute', top: 0, zIndex: 20 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 50,
+    marginLeft: 20,
+    position: "absolute",
+    top: 0,
+    zIndex: 20,
+  },
   logo: { width: 50, height: 50, marginRight: 8 },
   textBlock: { flexDirection: "column" },
   title: { fontSize: 20, fontWeight: "bold" },
   subtitle: { fontSize: 20, fontWeight: "bold", color: "#2196F3" },
-  imageWrapper: { position: "absolute", top: 100, left: 0, right: 0, alignItems: "center" },
+  imageWrapper: {
+    position: "absolute",
+    top: 100,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
   doctorImage: { width: "100%", height: 400, resizeMode: "contain" },
   scrollContent: { flexGrow: 1, justifyContent: "flex-end" },
   loginCard: {
@@ -239,18 +304,23 @@ const styles = StyleSheet.create({
     height: 48,
   },
   input: { flex: 1, color: "#fff", paddingRight: 10 },
-  loginButton: { backgroundColor: "#2196F3", borderRadius: 25, paddingVertical: 12, paddingHorizontal: 50, marginTop: 30 },
+  loginButton: {
+    backgroundColor: "#2196F3",
+    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 50,
+    marginTop: 30,
+  },
   loginButtonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
 });
 
-// === STYLES KHUSUS MODAL (Disalin dari HomeCatatanPartograf) ===
 const modalStyles = StyleSheet.create({
   backdrop: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "rgba(0, 0, 0, 0.5)",
-    paddingHorizontal: 20
+    paddingHorizontal: 20,
   },
   alertBox: {
     width: "100%",
@@ -277,14 +347,14 @@ const modalStyles = StyleSheet.create({
     fontWeight: "bold",
     color: THEME.textMain,
     marginBottom: 10,
-    textAlign: "center"
+    textAlign: "center",
   },
   message: {
     fontSize: 15,
     color: THEME.textMain,
     textAlign: "center",
     marginBottom: 25,
-    lineHeight: 22
+    lineHeight: 22,
   },
   button: {
     paddingVertical: 14,
@@ -292,12 +362,12 @@ const modalStyles = StyleSheet.create({
     borderRadius: 12,
     width: "100%",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
   },
   buttonText: {
     color: "#FFF",
     fontWeight: "bold",
     fontSize: 14,
-    textAlign: "center"
-  }
+    textAlign: "center",
+  },
 });

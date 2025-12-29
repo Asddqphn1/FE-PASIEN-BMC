@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "FE-PASIEN-BMC",
+    "name": "RuangBunda Pasien",
     "slug": "FE-PASIEN-BMC",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/Logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {

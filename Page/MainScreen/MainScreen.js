@@ -12,8 +12,15 @@ import {
   TouchableOpacity,
   Vibration,
   Modal,
+  Linking,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  Ionicons,
+  FontAwesome5,
+  MaterialCommunityIcons,
+  Feather,
+} from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import {
   COLORS,
@@ -36,11 +43,10 @@ import IbuStatusCard from "../../components/IbuStatusCard";
 import BottomTabBar from "../../components/BottomTabBar";
 
 // ==========================================
-// 0. COMPONENT ALERT MODERN (CUSTOM)
+// 0. COMPONENT ALERT MODERN
 // ==========================================
 const ModernAlert = ({ visible, title, message, type, actions }) => {
   if (!visible) return null;
-
   let iconName = "alert-circle";
   let color = COLORS.primaryBlue;
 
@@ -59,7 +65,6 @@ const ModernAlert = ({ visible, title, message, type, actions }) => {
           <Ionicons name={iconName} size={60} color={color} />
           <Text style={styles.modalTitle}>{title}</Text>
           <Text style={styles.modalMessage}>{message}</Text>
-
           <View style={styles.modalActions}>
             {actions.map((action, index) => (
               <TouchableOpacity
@@ -92,16 +97,217 @@ const ModernAlert = ({ visible, title, message, type, actions }) => {
 };
 
 // ==========================================
-// 1. COMPONENT: BREATHING MODAL (POP-UP)
+// 0.1 PANIC CONFIRM MODAL (FIXED)
 // ==========================================
-// Menggantikan BreathingGuide inline agar lebih fokus saat kontraksi
+const PanicConfirmModal = ({ visible, onCancel, onConfirm }) => {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+    >
+      <View style={modalStyles.overlay}>
+        <View style={modalStyles.card}>
+          <View style={modalStyles.iconWrap}>
+            <Ionicons name="alert-circle" size={40} color="#D32F2F" />
+          </View>
+
+          <Text style={modalStyles.title}>Konfirmasi Darurat</Text>
+
+          <Text style={modalStyles.desc}>
+            Tindakan ini akan mengirim sinyal darurat ke bidan.
+            {"\n\n"}
+            Gunakan hanya jika Bunda mengalami kondisi gawat atau membutuhkan
+            bantuan segera.
+          </Text>
+
+          <View style={modalStyles.actions}>
+            <TouchableOpacity style={modalStyles.cancelBtn} onPress={onCancel}>
+              <Text style={modalStyles.cancelText}>Batal</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={modalStyles.confirmBtn}
+              onPress={onConfirm}
+            >
+              <Text style={modalStyles.confirmText}>Ya, Panggil Bidan</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+// ==========================================
+// 1. COMPONENT: BABY BORN CARD
+// ==========================================
+const BabyBornCard = ({ babyData, ibuName }) => {
+  if (!babyData) return null;
+
+  const birthDate = new Date(babyData.tanggal_jam_waktu_bayi_lahir);
+  const dateStr = birthDate.toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const timeStr = birthDate.toLocaleTimeString("id-ID", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const isGirl = babyData.jenis_kelamin?.toLowerCase() === "perempuan";
+  const themeColor = isGirl ? "#F48FB1" : "#42A5F5";
+
+  return (
+    <View style={styles.bornContainer}>
+      <View style={[styles.bornHeader, { backgroundColor: themeColor }]}>
+        <Text style={styles.bornTitle}>Alhamdulillah!</Text>
+        <Text style={styles.bornSubtitle}>Selamat Bunda {ibuName}</Text>
+      </View>
+
+      <View style={styles.bornBody}>
+        <View style={styles.bornIconWrapper}>
+          <FontAwesome5 name="baby" size={60} color={themeColor} />
+          <View style={styles.confettiIcon}>
+            <MaterialCommunityIcons
+              name="party-popper"
+              size={30}
+              color="#FFD700"
+            />
+          </View>
+        </View>
+
+        <Text style={styles.bornMessage}>
+          Buah hati tercinta telah lahir dengan selamat dan sehat.
+        </Text>
+
+        <View style={styles.bornDivider} />
+
+        <View style={styles.bornGrid}>
+          <View style={styles.bornItem}>
+            <MaterialCommunityIcons
+              name="gender-male-female"
+              size={24}
+              color="#555"
+            />
+            <Text style={styles.bornLabel}>Jenis Kelamin</Text>
+            <Text style={[styles.bornValue, { color: themeColor }]}>
+              {babyData.jenis_kelamin || "-"}
+            </Text>
+          </View>
+
+          <View style={styles.bornItem}>
+            <MaterialCommunityIcons name="weight" size={24} color="#555" />
+            <Text style={styles.bornLabel}>Berat Badan</Text>
+            <Text style={styles.bornValue}>{babyData.berat_badan} kg</Text>
+          </View>
+
+          <View style={styles.bornItem}>
+            <MaterialCommunityIcons name="ruler" size={24} color="#555" />
+            <Text style={styles.bornLabel}>Panjang</Text>
+            <Text style={styles.bornValue}>{babyData.panjang_badan} cm</Text>
+          </View>
+
+          <View style={styles.bornItem}>
+            <MaterialCommunityIcons
+              name="clock-outline"
+              size={24}
+              color="#555"
+            />
+            <Text style={styles.bornLabel}>Waktu Lahir</Text>
+            <Text style={styles.bornValue}>{timeStr}</Text>
+          </View>
+        </View>
+        <Text style={styles.bornDate}>{dateStr}</Text>
+      </View>
+    </View>
+  );
+};
+
+// ==========================================
+// 2. COMPONENT: REFERRAL CARD (RUJUKAN)
+// ==========================================
+const ReferralCard = ({ alasanRujukan, bidanName }) => {
+  // DATA STATIS RS
+  const RS_INFO = {
+    nama: "Rumah Sakit Tentara Pekanbaru",
+    alamat:
+      "Jl. Kesehatan No.2, RT.01/RW.06, Kp. Bandar, Kec. Senapelan, Kota Pekanbaru, Riau 28155",
+    mapsUrl: "https://maps.google.com/?q=Rumah+Sakit+Tentara+Pekanbaru",
+  };
+
+  const openMaps = () => {
+    Linking.openURL(RS_INFO.mapsUrl).catch((err) =>
+      console.error("Couldn't load page", err)
+    );
+  };
+
+  return (
+    <View style={styles.referralContainer}>
+      {/* Header Rujukan */}
+      <View style={styles.referralHeader}>
+        <View style={styles.referralIconPulse}>
+          <FontAwesome5 name="ambulance" size={32} color="white" />
+        </View>
+        <Text style={styles.referralTitle}>PASIEN DIRUJUK</Text>
+        <Text style={styles.referralSubtitle}>
+          Mohon tetap tenang, Bidan {bidanName} telah memproses rujukan.
+        </Text>
+      </View>
+
+      {/* Body Informasi */}
+      <View style={styles.referralBody}>
+        {/* Tujuan RS (Statis) */}
+        <View style={styles.referralSection}>
+          <Text style={styles.referralLabel}>Faskes Tujuan:</Text>
+          <TouchableOpacity
+            style={styles.destinationBox}
+            onPress={openMaps}
+            activeOpacity={0.8}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.destinationTitle}>{RS_INFO.nama}</Text>
+              <Text style={styles.destinationAddress}>{RS_INFO.alamat}</Text>
+            </View>
+            <View style={styles.mapIconBtn}>
+              <Feather name="map-pin" size={20} color="white" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.divider} />
+
+        {/* Alasan Rujukan (Dinamis dari Status Ibu) */}
+        <View style={styles.referralRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.referralLabel}>Indikasi Medis:</Text>
+            <View style={styles.reasonBox}>
+              <Ionicons
+                name="medical"
+                size={18}
+                color="#D32F2F"
+                style={{ marginRight: 8 }}
+              />
+              <Text style={styles.referralValue}>{alasanRujukan}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+};
+
+// ==========================================
+// 3. BREATHING & PANIC COMPONENTS
+// ==========================================
 const BreathingModal = ({ visible, onClose }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const [textGuide, setTextGuide] = useState("Tarik Napas...");
 
   useEffect(() => {
     if (!visible) return;
-
     let isMounted = true;
     const breathe = () => {
       if (!isMounted) return;
@@ -123,7 +329,6 @@ const BreathingModal = ({ visible, onClose }) => {
       });
     };
     breathe();
-    
     return () => {
       isMounted = false;
       scaleAnim.setValue(1);
@@ -131,13 +336,16 @@ const BreathingModal = ({ visible, onClose }) => {
   }, [visible, scaleAnim]);
 
   if (!visible) return null;
-
   return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+    <Modal
+      transparent
+      visible={visible}
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.breathingOverlay}>
         <View style={styles.breathingContainerModal}>
           <Text style={styles.breathingTitle}>Sedang Kontraksi</Text>
-          
           <View style={styles.circleWrapper}>
             <Animated.View
               style={[
@@ -147,13 +355,13 @@ const BreathingModal = ({ visible, onClose }) => {
             />
             <Text style={styles.breathingText}>{textGuide}</Text>
           </View>
-
           <Text style={styles.breathingSub}>
             Fokus pada lingkaran. Ikuti ritme napas untuk meredakan nyeri.
           </Text>
-
           <TouchableOpacity style={styles.closeBreathingBtn} onPress={onClose}>
-            <Text style={styles.closeBreathingText}>Kontraksi Selesai / Tutup</Text>
+            <Text style={styles.closeBreathingText}>
+              Kontraksi Selesai / Tutup
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -161,54 +369,80 @@ const BreathingModal = ({ visible, onClose }) => {
   );
 };
 
-// ==========================================
-// 2. SUB-COMPONENT: PANIC BUTTON
-// ==========================================
-const PanicButton = ({ onPress, isLoading }) => (
-  <TouchableOpacity
-    style={[styles.panicButton, isLoading && { opacity: 0.7 }]}
-    onPress={isLoading ? null : onPress}
-    activeOpacity={0.8}
-  >
-    <View style={styles.panicInner}>
-      <View style={styles.panicIconBg}>
-        {isLoading ? (
-          <ActivityIndicator color={COLORS.accentError} />
-        ) : (
-          <Ionicons name="alert" size={32} color={COLORS.accentError} />
-        )}
-      </View>
-      <View style={{ marginLeft: 15, flex: 1 }}>
-        <Text style={styles.panicTitle}>
-          {isLoading ? "MENGIRIM SINYAL..." : "PANGGIL BIDAN"}
-        </Text>
-        <Text style={styles.panicSub}>
-          {isLoading ? "Mohon tunggu sebentar" : "Tekan untuk sinyal darurat"}
-        </Text>
-      </View>
-      {!isLoading && (
-        <Ionicons name="chevron-forward" size={24} color="white" />
-      )}
-    </View>
-  </TouchableOpacity>
-);
+const PanicButton = ({ onPress, isLoading }) => {
+  const [showConfirm, setShowConfirm] = React.useState(false);
+
+  return (
+    <>
+      <TouchableOpacity
+        style={[styles.panicButton, isLoading && { opacity: 0.7 }]}
+        onPress={isLoading ? null : () => setShowConfirm(true)}
+        activeOpacity={0.85}
+      >
+        <View style={styles.panicInner}>
+          <View style={styles.panicIconBg}>
+            {isLoading ? (
+              <ActivityIndicator color={COLORS.accentError} />
+            ) : (
+              <Ionicons
+                name="alert-circle"
+                size={32}
+                color={COLORS.accentError}
+              />
+            )}
+          </View>
+
+          <View style={{ marginLeft: 15, flex: 1 }}>
+            <Text style={styles.panicTitle}>
+              {isLoading ? "MENGIRIM SINYAL..." : "PANGGIL BIDAN"}
+            </Text>
+            <Text style={styles.panicSub}>
+              {isLoading
+                ? "Mohon tunggu sebentar"
+                : "Gunakan hanya saat darurat"}
+            </Text>
+          </View>
+
+          {!isLoading && (
+            <Ionicons name="chevron-forward" size={24} color="white" />
+          )}
+        </View>
+      </TouchableOpacity>
+
+      {/* Modal Konfirmasi */}
+      <PanicConfirmModal
+        visible={showConfirm}
+        onCancel={() => setShowConfirm(false)}
+        onConfirm={() => {
+          setShowConfirm(false);
+          onPress();
+        }}
+      />
+    </>
+  );
+};
 
 // ==========================================
-// 3. MAIN SCREEN
+// 4. MAIN SCREEN
 // ==========================================
 export default function MainScreen() {
   const navigate = useNavigate();
-
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [panicLoading, setPanicLoading] = useState(false);
-  
-  // State untuk Breathing Modal
   const [showBreathing, setShowBreathing] = useState(false);
 
+  // Data Pasien
   const [pasienName, setPasienName] = useState("");
   const [bidanName, setBidanName] = useState("Memuat Bidan...");
 
+  // Status Logic
+  const [isFinished, setIsFinished] = useState(false);
+  const [isReferred, setIsReferred] = useState(false); // Status Rujukan
+  const [babyData, setBabyData] = useState(null);
+  const [referralReason, setReferralReason] = useState(""); // Alasan Rujukan
+
+  // Partograf Data
   const [pembukaan, setPembukaan] = useState(0);
   const [djj, setDjj] = useState(0);
   const [sistolik, setSistolik] = useState("---");
@@ -222,7 +456,6 @@ export default function MainScreen() {
     message: "Memuat...",
   });
 
-  // State untuk Alert Modern
   const [alertConfig, setAlertConfig] = useState({
     visible: false,
     title: "",
@@ -230,37 +463,100 @@ export default function MainScreen() {
     type: "info",
     actions: [],
   });
-
   const isFocusMode = pembukaan >= 4 && pembukaan < 10;
-
+  const activePhase = getDilatationPhase(pembukaan);
   const closeAlert = () => setAlertConfig({ ...alertConfig, visible: false });
 
-  const fetchBidanData = async (pasienId, token) => {
+  // === HELPER: GENERATE ALASAN RUJUKAN ===
+  const generateReferralReason = (sis, dia, temp, hr) => {
+    let reasons = [];
+
+    // Parse angka (hilangkan string non-numeric)
+    const s = parseFloat(sis);
+    const d = parseFloat(dia);
+    const t = parseFloat(temp);
+    const h = parseFloat(hr);
+
+    // Logika Medis Sederhana untuk Alasan Rujukan
+    if (s >= 140 || d >= 90) reasons.push("Hipertensi (Tekanan Darah Tinggi)");
+    if (s < 90 && s > 0) reasons.push("Hipotensi (Tekanan Darah Rendah)");
+    if (t >= 38) reasons.push("Demam Tinggi (Febris)");
+    if (h > 100) reasons.push("Takikardia (Nadi Cepat)");
+
+    // Jika tidak ada yang abnormal tapi status rujukan, pakai alasan umum
+    if (reasons.length === 0)
+      return "Indikasi Medis / Perburukan Kondisi Ibu atau Janin";
+
+    return reasons.join(", ");
+  };
+
+  // === FETCH STATUS PASIEN ===
+  const fetchPatientStatus = async (noReg, token) => {
     try {
-      const BIDAN_URL = `${BASE_URL_PATIENT}/${pasienId}/bidanId`;
-      const res = await fetch(BIDAN_URL, {
+      const URL = `https://restful-api-bmc-production-v2.up.railway.app/api/pasien/${noReg}/getData`;
+      const res = await fetch(URL, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
-      if (json.bidan_nama) {
-        setBidanName(json.bidan_nama.trim() || "Bidan");
-      } else {
-        setBidanName("Bidan Tidak Ditemukan");
+
+      if (
+        res.ok &&
+        json.data &&
+        json.data.persalinan &&
+        json.data.persalinan.length > 0
+      ) {
+        const latestLabor = json.data.persalinan[0];
+
+        if (latestLabor.status === "selesai") {
+          // KONDISI 1: SELESAI
+          setIsFinished(true);
+          setIsReferred(false);
+          setBabyData({
+            jenis_kelamin: latestLabor.jenis_kelamin,
+            berat_badan: latestLabor.berat_badan,
+            panjang_badan: latestLabor.panjang_badan,
+            tanggal_jam_waktu_bayi_lahir:
+              latestLabor.tanggal_jam_waktu_bayi_lahir,
+          });
+        } else if (
+          latestLabor.status === "rujukan" ||
+          latestLabor.is_rujukan === 1
+        ) {
+          // KONDISI 2: RUJUKAN
+          setIsReferred(true);
+          setIsFinished(false);
+        } else {
+          // KONDISI 3: NORMAL
+          setIsFinished(false);
+          setIsReferred(false);
+        }
       }
     } catch (err) {
-      console.log("ERROR FETCH BIDAN:", err.message);
+      console.log("Error Fetch Status:", err);
+    }
+  };
+
+  const fetchBidanData = async (pasienId, token) => {
+    try {
+      const res = await fetch(`${BASE_URL_PATIENT}/${pasienId}/bidanId`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json();
+      if (json.bidan_nama) setBidanName(json.bidan_nama.trim() || "Bidan");
+      else setBidanName("Bidan Tidak Ditemukan");
+    } catch (err) {
       setBidanName("Error Memuat Bidan");
     }
   };
 
   const fetchPartografData = async (pasienId, token) => {
     try {
-      const PARTOGRAF_URL = `${BASE_URL_PATIENT}/${pasienId}/progres-persalinan`;
-      const res = await fetch(PARTOGRAF_URL, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `${BASE_URL_PATIENT}/${pasienId}/progres-persalinan`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-      const resetPartografState = () => {
+      const reset = () => {
         setPembukaan(0);
         setDjj(0);
         setSistolik("---");
@@ -272,37 +568,37 @@ export default function MainScreen() {
       };
 
       if (!res.ok) {
-        resetPartografState();
+        reset();
         return;
       }
 
       const json = await res.json();
-      const dataArray = json.data;
-
-      if (!dataArray || dataArray.length === 0) {
-        resetPartografState();
-        return;
-      }
-
-      const latestData = getLatestFilledPartografData(dataArray);
+      const latestData = getLatestFilledPartografData(json.data);
       if (!latestData) {
-        resetPartografState();
+        reset();
         return;
       }
+
+      // Set State Data Vital
+      const s = cleanNumberString(latestData.sistolik);
+      const d = cleanNumberString(latestData.diastolik);
+      const n = cleanNumberString(latestData.nadi_ibu);
+      const t = cleanNumberString(latestData.suhu_ibu, true);
 
       setPembukaan(parseFloat(latestData.pembukaan_servik) || 0);
       setDjj(parseFloat(latestData.djj) || 0);
-      setSistolik(cleanNumberString(latestData.sistolik));
-      setDiastolik(cleanNumberString(latestData.diastolik));
-      setNadi(cleanNumberString(latestData.nadi_ibu));
-      setSuhu(cleanNumberString(latestData.suhu_ibu, true));
+      setSistolik(s);
+      setDiastolik(d);
+      setNadi(n);
+      setSuhu(t);
       setWaktuCatat(latestData.waktu_catat || "---");
       setDjjStatus(getDjjStatus(parseFloat(latestData.djj) || 0));
+
+      // Generate Alasan Rujukan (Jika status rujukan aktif)
+      const reason = generateReferralReason(s, d, t, n);
+      setReferralReason(reason);
     } catch (err) {
-      console.log("ERROR FETCH PARTOGRAF:", err.message);
-      setPembukaan(0);
-      setDjj(0);
-      setDjjStatus(getDjjStatus(0));
+      console.log("ERROR PARTOGRAF:", err.message);
     }
   };
 
@@ -310,20 +606,31 @@ export default function MainScreen() {
     async (isRefresh = false) => {
       try {
         if (isRefresh) setRefreshing(true);
-
         const token = await getTokenFromStorage();
         if (!token) {
           navigate("/login");
           return;
         }
 
-        const { pasienId, pasienName } = decodeJwtPayload(token);
+        const { pasienId, pasienName, noReg } = decodeJwtPayload(token);
         setPasienName(pasienName);
 
-        await Promise.all([
+        let regNumber = noReg;
+        if (!regNumber) {
+          const profileStr = await AsyncStorage.getItem("userProfile");
+          if (profileStr) {
+            const profile = JSON.parse(profileStr);
+            regNumber = profile.no_reg;
+          }
+        }
+
+        const promises = [
           fetchBidanData(pasienId, token),
           fetchPartografData(pasienId, token),
-        ]);
+        ];
+        if (regNumber) promises.push(fetchPatientStatus(regNumber, token));
+
+        await Promise.all(promises);
       } catch (err) {
         console.log("GENERAL ERROR:", err.message);
       } finally {
@@ -337,7 +644,6 @@ export default function MainScreen() {
   useEffect(() => {
     fetchData(false);
   }, [fetchData]);
-
   const onRefresh = useCallback(() => {
     fetchData(true);
   }, [fetchData]);
@@ -346,50 +652,42 @@ export default function MainScreen() {
     closeAlert();
     Vibration.vibrate([0, 500, 200, 500]);
     setPanicLoading(true);
-
     try {
       const token = await getTokenFromStorage();
       if (!token) {
         setAlertConfig({
           visible: true,
           title: "Sesi Habis",
-          message: "Silakan login ulang.",
+          message: "Login ulang.",
           type: "error",
           actions: [{ text: "Login", onPress: () => navigate("/login") }],
         });
         return;
       }
-
-      const URL_DARURAT =
-        "https://restful-api-bmc-production-v2.up.railway.app/api/darurat";
-
-      const response = await fetch(URL_DARURAT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ tipe: "PANIC_BUTTON" }),
-      });
-
-      const json = await response.json();
-
-      if (!response.ok) {
-        throw new Error(json.message || "Gagal mengirim sinyal.");
-      }
-
+      const res = await fetch(
+        "https://restful-api-bmc-production-v2.up.railway.app/api/darurat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ tipe: "PANIC_BUTTON" }),
+        }
+      );
+      if (!res.ok) throw new Error("Gagal kirim sinyal.");
       setAlertConfig({
         visible: true,
         title: "SINYAL TERKIRIM!",
-        message: `Notifikasi prioritas tinggi telah dikirim ke Bidan ${bidanName}.\n\nMohon tetap tenang.`,
+        message: `Bidan ${bidanName} segera datang.`,
         type: "success",
         actions: [{ text: "SAYA MENGERTI", onPress: closeAlert }],
       });
     } catch (error) {
       setAlertConfig({
         visible: true,
-        title: "GAGAL TERKIRIM",
-        message: `Error: ${error.message}\n\nSilakan panggil manual atau coba lagi.`,
+        title: "GAGAL",
+        message: "Coba lagi.",
         type: "error",
         actions: [
           { text: "BATAL", style: "cancel", onPress: closeAlert },
@@ -405,16 +703,13 @@ export default function MainScreen() {
     return (
       <View style={styles.loadingWrapper}>
         <ActivityIndicator size="large" color={COLORS.primaryBlue} />
-        <Text style={styles.loadingText}>Memuat asisten persalinan...</Text>
+        <Text style={styles.loadingText}>Memuat data...</Text>
       </View>
     );
   }
 
-  const activePhase = getDilatationPhase(pembukaan);
-
   return (
     <View style={styles.containerFixed}>
-      {/* 1. GLOBAL ALERT COMPONENT */}
       <ModernAlert
         visible={alertConfig.visible}
         title={alertConfig.title}
@@ -422,11 +717,9 @@ export default function MainScreen() {
         type={alertConfig.type}
         actions={alertConfig.actions}
       />
-
-      {/* 2. BREATHING MODAL (Muncul saat tombol ditekan) */}
-      <BreathingModal 
-        visible={showBreathing} 
-        onClose={() => setShowBreathing(false)} 
+      <BreathingModal
+        visible={showBreathing}
+        onClose={() => setShowBreathing(false)}
       />
 
       <ScrollView
@@ -443,11 +736,48 @@ export default function MainScreen() {
       >
         <HeaderTop />
 
-        {isFocusMode ? (
-          // ==========================================
-          // TAMPILAN MODE FOKUS (ACTIVE LABOR)
-          // ==========================================
+        {/* --- LOGIKA TAMPILAN UTAMA --- */}
+        {isFinished ? (
+          // === 1. TAMPILAN SELESAI (BAYI LAHIR) ===
+          <View style={{ marginTop: 20 }}>
+            <HeaderGradient pasienName={pasienName} />
+            <BabyBornCard babyData={babyData} ibuName={pasienName} />
+            <View style={{ marginHorizontal: 20, marginTop: 40 }}>
+              <MidwifeCard
+                bidanName={bidanName}
+                activePhase="Selesai"
+                waktuCatat={waktuCatat}
+              />
+            </View>
+            <Text style={styles.focusFooterText}>
+              "Terima kasih telah mempercayakan persalinan Bunda kepada kami."
+            </Text>
+          </View>
+        ) : isReferred ? (
+          // === 2. TAMPILAN RUJUKAN (STATIC HOSPITAL) ===
+          <View style={{ marginTop: 20 }}>
+            <HeaderGradient pasienName={pasienName} />
+
+            {/* Kartu Rujukan dengan RS Statis & Alasan Dinamis */}
+            <ReferralCard
+              alasanRujukan={referralReason}
+              bidanName={bidanName}
+            />
+
+            {/* Informasi Status Ibu (Penyebab Rujukan) */}
+            <View style={{ marginTop: 10 }}>
+              <IbuStatusCard
+                sistolik={sistolik}
+                diastolik={diastolik}
+                nadi={nadi}
+                suhu={suhu}
+              />
+            </View>
+          </View>
+        ) : isFocusMode ? (
+          // === 3. TAMPILAN FOKUS (KONTRAKSI AKTIF) ===
           <View style={styles.focusModeContainer}>
+            <HeaderGradient pasienName={pasienName} />
             <View style={{ marginBottom: 15, marginTop: 40 }}>
               <MidwifeCard
                 bidanName={bidanName}
@@ -464,61 +794,68 @@ export default function MainScreen() {
               />
             </View>
             <PanicButton onPress={handlePanic} isLoading={panicLoading} />
-
             <View style={{ marginTop: 5 }}>
               <DjjStatusCard djj={djj} djjStatus={djjStatus} />
             </View>
-
             <DilatationVisualizer pembukaan={pembukaan} />
-
-            <TouchableOpacity 
-                style={styles.contractionBtn} 
-                onPress={() => setShowBreathing(true)}
-                activeOpacity={0.7}
+            <TouchableOpacity
+              style={styles.contractionBtn}
+              onPress={() => setShowBreathing(true)}
+              activeOpacity={0.7}
             >
-                <View style={styles.contractionBtnIcon}>
-                    <Ionicons name="fitness" size={28} color={COLORS.primaryBlue} />
-                </View>
-                <View style={{flex: 1}}>
-                    <Text style={styles.contractionBtnText}>Mulai Panduan Napas</Text>
-                    <Text style={styles.contractionBtnSub}>Tekan ini saat kontraksi datang</Text>
-                </View>
-                <Ionicons name="play-circle" size={32} color={COLORS.primaryBlue} />
+              <View style={styles.contractionBtnIcon}>
+                <Ionicons name="fitness" size={28} color={COLORS.primaryBlue} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.contractionBtnText}>
+                  Mulai Panduan Napas
+                </Text>
+                <Text style={styles.contractionBtnSub}>
+                  Tekan saat kontraksi
+                </Text>
+              </View>
+              <Ionicons
+                name="play-circle"
+                size={32}
+                color={COLORS.primaryBlue}
+              />
             </TouchableOpacity>
-
             <Text style={styles.focusFooterText}>
               "Anda kuat, Bunda. Sebentar lagi bertemu si Kecil."
             </Text>
           </View>
         ) : (
-          // ==========================================
-          // TAMPILAN NORMAL
-          // ==========================================
+          // === 4. TAMPILAN MONITORING NORMAL ===
           <>
             <HeaderGradient pasienName={pasienName} />
-
-            {/* TOMBOL LATIHAN NAPAS (OPTIONAL DI MODE NORMAL) */}
-            <TouchableOpacity 
-                style={[styles.contractionBtn, {marginTop: -20, marginBottom: 20}]} 
-                onPress={() => setShowBreathing(true)}
-             >
-                <View style={{flex: 1}}>
-                    <Text style={styles.contractionBtnText}>Latihan Pernapasan</Text>
-                    <Text style={styles.contractionBtnSub}>Simulasi relaksasi napas</Text>
-                </View>
-                <Ionicons name="leaf-outline" size={24} color={COLORS.primaryBlue} />
-             </TouchableOpacity>
-
+            {/* <TouchableOpacity
+              style={[
+                styles.contractionBtn,
+                { marginTop: -20, marginBottom: 20 },
+              ]}
+              onPress={() => setShowBreathing(true)}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.contractionBtnText}>
+                  Latihan Pernapasan
+                </Text>
+                <Text style={styles.contractionBtnSub}>
+                  Simulasi relaksasi napas
+                </Text>
+              </View>
+              <Ionicons
+                name="leaf-outline"
+                size={24}
+                color={COLORS.primaryBlue}
+              />
+            </TouchableOpacity> */}
             <MidwifeCard
               bidanName={bidanName}
               activePhase={activePhase}
               waktuCatat={waktuCatat}
             />
-
             <DilatationVisualizer pembukaan={pembukaan} />
-
             <DjjStatusCard djj={djj} djjStatus={djjStatus} />
-
             <IbuStatusCard
               sistolik={sistolik}
               diastolik={diastolik}
@@ -528,34 +865,26 @@ export default function MainScreen() {
           </>
         )}
       </ScrollView>
-
       <BottomTabBar navigate={navigate} />
     </View>
   );
 }
 
+// ==========================================
+// STYLES (MAIN)
+// ==========================================
 const styles = StyleSheet.create({
-  containerFixed: {
-    flex: 1,
-    backgroundColor: COLORS.offWhite,
-  },
-  scrollViewContent: {
-    flex: 1,
-    backgroundColor: COLORS.offWhite,
-  },
+  containerFixed: { flex: 1, backgroundColor: COLORS.offWhite },
+  scrollViewContent: { flex: 1, backgroundColor: COLORS.offWhite },
   loadingWrapper: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: COLORS.white,
   },
-  loadingText: {
-    marginTop: 10,
-    color: COLORS.textSecondary,
-    fontSize: 14,
-  },
+  loadingText: { marginTop: 10, color: COLORS.textSecondary, fontSize: 14 },
 
-  // MODAL STYLES (ALERT)
+  // Modal & Alert Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -570,10 +899,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
     elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
   },
   modalTitle: {
     fontSize: 20,
@@ -607,21 +932,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DDD",
   },
-  modalBtnText: {
-    fontWeight: "bold",
-    fontSize: 14,
-  },
+  modalBtnText: { fontWeight: "bold", fontSize: 14 },
 
-  // STYLES BARU UNTUK BREATHING MODAL
+  // Breathing Modal
   breathingOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,10,30, 0.9)", // Background gelap
+    backgroundColor: "rgba(0,10,30, 0.9)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
   breathingContainerModal: {
-    width: '100%',
+    width: "100%",
     backgroundColor: COLORS.white,
     borderRadius: 30,
     padding: 30,
@@ -634,14 +956,10 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     paddingHorizontal: 30,
     borderRadius: 50,
-    width: '100%',
-    alignItems: 'center'
+    width: "100%",
+    alignItems: "center",
   },
-  closeBreathingText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold'
-  },
+  closeBreathingText: { color: "white", fontSize: 16, fontWeight: "bold" },
   circleWrapper: {
     height: 160,
     justifyContent: "center",
@@ -663,11 +981,7 @@ const styles = StyleSheet.create({
     zIndex: 2,
     textAlign: "center",
   },
-  breathingTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: COLORS.darkBlue,
-  },
+  breathingTitle: { fontSize: 20, fontWeight: "800", color: COLORS.darkBlue },
   breathingSub: {
     textAlign: "center",
     color: COLORS.textSecondary,
@@ -676,30 +990,30 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 
-  // STYLES BARU UNTUK TOMBOL PEMICU (TRIGGER)
+  // Contraction Btn
   contractionBtn: {
     marginHorizontal: 18,
     marginBottom: 15,
     backgroundColor: COLORS.white,
     borderRadius: 20,
     padding: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: 2,
     borderColor: COLORS.primaryBlue,
     ...SHADOW_STYLE,
   },
   contractionBtnIcon: {
-    width: 50, 
-    height: 50, 
-    borderRadius: 25, 
-    backgroundColor: COLORS.lightBlue, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: COLORS.lightBlue,
+    justifyContent: "center",
+    alignItems: "center",
   },
   contractionBtnText: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     color: COLORS.primaryBlue,
     marginLeft: 15,
   },
@@ -708,12 +1022,9 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginLeft: 15,
   },
+  focusModeContainer: { marginTop: 10, paddingBottom: 20 },
 
-  // Focus Mode Styles Lainnya
-  focusModeContainer: {
-    marginTop: 10,
-    paddingBottom: 20,
-  },
+  // Panic Button
   panicButton: {
     marginHorizontal: 18,
     marginBottom: 25,
@@ -744,17 +1055,257 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0.5,
   },
-  panicSub: {
-    color: COLORS.white,
-    opacity: 0.9,
-    fontSize: 13,
-    marginTop: 2,
-  },
+  panicSub: { color: COLORS.white, opacity: 0.9, fontSize: 13, marginTop: 2 },
   focusFooterText: {
     textAlign: "center",
     fontStyle: "italic",
     color: COLORS.textSecondary,
     marginTop: 10,
     fontSize: 14,
+    marginBottom: 20,
+  },
+
+  // BABY BORN CARD
+  bornContainer: {
+    marginHorizontal: 20,
+    backgroundColor: "white",
+    borderRadius: 24,
+    overflow: "hidden",
+    ...SHADOW_STYLE,
+    marginBottom: 20,
+  },
+  bornHeader: {
+    paddingVertical: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  bornTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "white",
+    marginBottom: 5,
+  },
+  bornSubtitle: {
+    fontSize: 16,
+    color: "rgba(255,255,255,0.9)",
+    fontWeight: "600",
+  },
+  bornBody: { padding: 20, alignItems: "center" },
+  bornIconWrapper: { marginBottom: 15, position: "relative" },
+  confettiIcon: { position: "absolute", top: -10, right: -15 },
+  bornMessage: {
+    textAlign: "center",
+    fontSize: 15,
+    color: COLORS.textSecondary,
+    lineHeight: 22,
+    paddingHorizontal: 10,
+  },
+  bornDivider: {
+    height: 1,
+    width: "100%",
+    backgroundColor: "#EEE",
+    marginVertical: 20,
+  },
+  bornGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    width: "100%",
+  },
+  bornItem: {
+    width: "48%",
+    backgroundColor: "#F8F9FA",
+    borderRadius: 16,
+    padding: 15,
+    marginBottom: 15,
+    alignItems: "center",
+  },
+  bornLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  bornValue: { fontSize: 16, fontWeight: "bold", color: "#333" },
+  bornDate: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "#999",
+    fontStyle: "italic",
+  },
+
+  // REFERRAL CARD STYLES
+  referralContainer: {
+    marginHorizontal: 20,
+    backgroundColor: "white",
+    borderRadius: 24,
+    overflow: "hidden",
+    ...SHADOW_STYLE,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#FFE0B2",
+  },
+  referralHeader: {
+    backgroundColor: "#FF9800",
+    paddingVertical: 25,
+    paddingHorizontal: 20,
+    alignItems: "center",
+  },
+  referralIconPulse: {
+    marginBottom: 10,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    padding: 10,
+    borderRadius: 50,
+  },
+  referralTitle: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "white",
+    letterSpacing: 1,
+  },
+  referralSubtitle: {
+    textAlign: "center",
+    color: "rgba(255,255,255,0.9)",
+    marginTop: 5,
+    fontSize: 14,
+  },
+  referralBody: { padding: 20 },
+  referralSection: { marginBottom: 15 },
+  referralLabel: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 5 },
+  destinationBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E3F2FD",
+    padding: 15,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primaryBlue,
+    elevation: 2,
+  },
+  destinationTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: COLORS.darkBlue,
+    marginBottom: 4,
+  },
+  destinationAddress: { fontSize: 12, color: "#555", lineHeight: 16 },
+  mapIconBtn: {
+    backgroundColor: COLORS.primaryBlue,
+    padding: 8,
+    borderRadius: 8,
+    marginLeft: 10,
+  },
+  referralValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#C62828",
+    flex: 1,
+    lineHeight: 20,
+  },
+  reasonBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFEBEE",
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 5,
+  },
+  divider: { height: 1, backgroundColor: "#EEE", marginVertical: 15 },
+  referralRow: { flexDirection: "row", alignItems: "center" },
+  instructionBox: {
+    marginTop: 20,
+    backgroundColor: "#FFF8E1",
+    padding: 12,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  instructionText: {
+    marginLeft: 10,
+    color: "#E65100",
+    fontSize: 13,
+    flex: 1,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+});
+
+// ==========================================
+// STYLES (MODAL)
+// ==========================================
+const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 380,
+    elevation: 6,
+  },
+
+  iconWrap: {
+    alignSelf: "center",
+    backgroundColor: "#FDECEA",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    textAlign: "center",
+    color: "#263238",
+    marginBottom: 8,
+  },
+
+  desc: {
+    fontSize: 14,
+    color: "#546E7A",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+
+  actions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#ECEFF1",
+    alignItems: "center",
+  },
+
+  cancelText: {
+    color: "#455A64",
+    fontWeight: "600",
+  },
+
+  confirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#D32F2F",
+    alignItems: "center",
+  },
+
+  confirmText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
 });

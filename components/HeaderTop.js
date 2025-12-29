@@ -19,10 +19,6 @@ const HeaderTop = () => (
     </View>
 
     <TouchableOpacity style={styles.notificationButton}>
-      <Ionicons name="notifications-outline" size={26} color={COLORS.textPrimary} />
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>2</Text>
-      </View>
     </TouchableOpacity>
   </View>
 );
